@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex,nofollow" />
+    <title>反馈记录本机恢复</title>
+    <style>
+      :root { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: #14212b; background: #f4f6f8; }
+      body { margin: 0; padding: 24px; }
+      main { max-width: 680px; margin: 8vh auto; padding: 32px; background: white; border: 1px solid #dce2e6; border-radius: 18px; box-shadow: 0 12px 36px #12212b12; }
+      h1 { margin-top: 0; font-size: 24px; }
+      p, li { line-height: 1.65; }
+      .count { display: flex; gap: 16px; flex-wrap: wrap; margin: 24px 0; }
+      .tile { min-width: 150px; padding: 16px; border-radius: 12px; background: #f4f6f8; }
+      .number { display: block; font-size: 28px; font-weight: 700; }
+      button { border: 0; border-radius: 10px; padding: 13px 18px; color: white; background: #e20015; font-size: 16px; font-weight: 650; cursor: pointer; }
+      button:disabled { background: #9da6ad; cursor: not-allowed; }
+      .note { padding: 12px 14px; background: #fff5e5; border-left: 4px solid #ed9b00; }
+      footer { margin-top: 24px; color: #687780; font-size: 13px; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>反馈记录本机恢复</h1>
+      <p>此页面只读取当前浏览器在本网站保存的反馈，不会上传数据。请在<strong>当时填写问卷的同一台设备、同一个浏览器</strong>中打开。</p>
+      <div class="count" aria-live="polite">
+        <div class="tile"><span class="number" id="total">0</span>本机缓存记录</div>
+        <div class="tile"><span class="number" id="localOnly">0</span>疑似未上传记录</div>
+      </div>
+      <p id="message" class="note"></p>
+      <button id="download" type="button">下载本机记录 JSON</button>
+      <ol>
+        <li>不要清除浏览器数据，也不要换浏览器或设备。</li>
+        <li>点击上方按钮下载 JSON 文件。</li>
+        <li>把文件交给活动数据管理员汇总；同一条记录可能同时出现在云端和本机，汇总时会去重。</li>
+      </ol>
+      <footer>文件仅保存在此设备的下载目录。本页面不会自动发送记录。</footer>
+    </main>
+    <script>
+      (() => {
+        const mirrorKey = 'supplier_day_submissions_mirror';
+        const myKey = 'my_supplier_submission';
+        const parse = (key) => {
+          try { return JSON.parse(localStorage.getItem(key) || 'null'); }
+          catch { return null; }
+        };
+        const mirror = parse(mirrorKey);
+        const mine = parse(myKey);
+        const records = Array.isArray(mirror) ? [...mirror] : [];
+        if (mine && typeof mine === 'object' && !Array.isArray(mine)) records.push(mine);
+        const seen = new Set();
+        const unique = records.filter((item) => {
+          if (!item || typeof item !== 'object') return false;
+          const key = item.id || `${item.name || ''}|${item.company || ''}|${item.timestamp || ''}`;
+          if (seen.has(key)) return false;
+          seen.add(key);
+          return true;
+        });
+        const failed = unique.filter((item) => String(item.id || '').startsWith('local-'));
+        document.getElementById('total').textContent = String(unique.length);
+        document.getElementById('localOnly').textContent = String(failed.length);
+        document.getElementById('message').textContent = unique.length
+          ? `找到 ${unique.length} 条本机缓存，其中 ${failed.length} 条 ID 标记为本地暂存、可能没有上传成功。请下载文件后统一核对。`
+          : '这个浏览器没有找到本网站保存的反馈。请确认设备、浏览器和网站地址与当时填写问卷时完全一致。';
+        const button = document.getElementById('download');
+        button.disabled = unique.length === 0;
+        button.addEventListener('click', () => {
+          const payload = {
+            source: 'supplier-day-feedback-local-recovery',
+            exportedAt: new Date().toISOString(),
+            origin: location.origin,
+            count: unique.length,
+            suspectedNotUploadedCount: failed.length,
+            submissions: unique,
+          };
+          const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+          const url = URL.createObjectURL(blob);
+          const link = document.createElement('a');
+          link.href = url;
+          link.download = `supplier-day-local-recovery-${new Date().toISOString().replace(/[:.]/g, '-')}.json`;
+          link.click();
+          window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+        });
+      })();
+    </script>
+  </body>
+</html>
